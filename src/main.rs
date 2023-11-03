@@ -37,6 +37,10 @@ impl Matcher {
                     let previous_fragment = fragments.pop().unwrap();
                     fragments.push(Match::EndOfLine(Box::new(previous_fragment)));
                 }
+                '+' => {
+                    let previous_fragment = fragments.pop().unwrap();
+                    fragments.push(Match::OneOfMore(Box::new(previous_fragment)));
+                }
                 c => fragments.push(Match::Literal(c.to_string())),
             }
         }
@@ -118,6 +122,7 @@ enum Match {
     NegativeGroup(Vec<Match>),
     StartOfLine(Box<Match>),
     EndOfLine(Box<Match>),
+    OneOfMore(Box<Match>),
 }
 
 enum MatchResult {
@@ -220,6 +225,27 @@ impl Match {
                         }
                     }
                     MatchResult::NoMatch => result,
+                }
+            }
+            Match::OneOfMore(fragment) => {
+                let mut match_length = 0;
+
+                loop {
+                    let new_index = *char_index + match_length;
+                    let result = fragment.r#match(input_line, &new_index);
+
+                    match result {
+                        MatchResult::Match(fragment_match_length) => {
+                            match_length += fragment_match_length;
+                        }
+                        MatchResult::NoMatch => {
+                            if match_length == 0 {
+                                return MatchResult::NoMatch;
+                            } else {
+                                return MatchResult::Match(match_length);
+                            }
+                        }
+                    }
                 }
             }
         }
