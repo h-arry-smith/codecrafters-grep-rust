@@ -5,30 +5,13 @@ use std::process;
 
 struct Matcher {
     fragments: Vec<Match>,
-    match_from_start: bool,
-    match_from_end: bool,
 }
 
 impl Matcher {
-    fn from_pattern(mut pattern: &str) -> Self {
-        let match_from_start = pattern.starts_with('^');
-        let match_from_end = pattern.ends_with('$');
-
-        if match_from_start {
-            pattern = &pattern[1..];
-        }
-
-        if match_from_end {
-            pattern = &pattern[..pattern.len() - 1];
-        }
-
+    fn from_pattern(pattern: &str) -> Self {
         let fragments = Self::parse_pattern(pattern);
 
-        Self {
-            fragments,
-            match_from_start,
-            match_from_end,
-        }
+        Self { fragments }
     }
 
     fn parse_pattern(pattern: &str) -> Vec<Match> {
@@ -42,6 +25,17 @@ impl Matcher {
                 }
                 '[' => {
                     Self::parse_positive_character_group(&mut chars, &mut fragments);
+                }
+                // TODO: Maybe these have to be first/last and we should check that?
+                '^' => {
+                    let next_char = chars.next().unwrap().to_string();
+                    fragments.push(Match::StartOfLine(Box::new(
+                        Self::parse_pattern(&next_char).pop().unwrap(),
+                    )));
+                }
+                '$' => {
+                    let previous_fragment = fragments.pop().unwrap();
+                    fragments.push(Match::EndOfLine(Box::new(previous_fragment)));
                 }
                 c => fragments.push(Match::Literal(c.to_string())),
             }
@@ -92,11 +86,6 @@ impl Matcher {
         loop {
             // We are out of fragments, so the pattern has matched
             if current_fragment.is_none() {
-                // If match_from_end is true, then we need to check that we are at the end of the string
-                if self.match_from_end && char_index < input_line.len() {
-                    return false;
-                }
-
                 return true;
             }
 
@@ -114,13 +103,7 @@ impl Matcher {
                     char_index += match_length;
                 }
                 MatchResult::NoMatch => {
-                    // If match_from_start is true, then we fail here
-                    if self.match_from_start {
-                        return false;
-                    } else {
-                        // The fragment didn't match, so we advance the char_index and try again
-                        char_index += 1;
-                    }
+                    char_index += 1;
                 }
             }
         }
@@ -133,6 +116,8 @@ enum Match {
     Class(Class),
     PositiveGroup(Vec<Match>),
     NegativeGroup(Vec<Match>),
+    StartOfLine(Box<Match>),
+    EndOfLine(Box<Match>),
 }
 
 enum MatchResult {
@@ -211,6 +196,32 @@ impl Match {
                 .iter()
                 .all(|fragment| (!fragment.r#match(input_line, char_index)).into())
                 .into(),
+            Match::StartOfLine(fragment) => {
+                let result = fragment.r#match(input_line, char_index);
+                match result {
+                    MatchResult::Match(_) => {
+                        if *char_index == 0 {
+                            result
+                        } else {
+                            MatchResult::NoMatch
+                        }
+                    }
+                    MatchResult::NoMatch => result,
+                }
+            }
+            Match::EndOfLine(fragment) => {
+                let result = fragment.r#match(input_line, char_index);
+                match result {
+                    MatchResult::Match(match_length) => {
+                        if *char_index + match_length == input_line.len() {
+                            result
+                        } else {
+                            MatchResult::NoMatch
+                        }
+                    }
+                    MatchResult::NoMatch => result,
+                }
+            }
         }
     }
 }
