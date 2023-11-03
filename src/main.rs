@@ -45,6 +45,9 @@ impl Matcher {
                     let previous_fragment = fragments.pop().unwrap();
                     fragments.push(Match::ZeroOrOne(Box::new(previous_fragment)));
                 }
+                '.' => {
+                    fragments.push(Match::AnyChar);
+                }
                 c => fragments.push(Match::Literal(c.to_string())),
             }
         }
@@ -128,6 +131,7 @@ enum Match {
     EndOfLine(Box<Match>),
     OneOfMore(Box<Match>),
     ZeroOrOne(Box<Match>),
+    AnyChar,
 }
 
 enum MatchResult {
@@ -261,6 +265,7 @@ impl Match {
                     MatchResult::NoMatch => MatchResult::Match(0),
                 }
             }
+            Match::AnyChar => MatchResult::Match(1),
         }
     }
 }
