@@ -48,6 +48,9 @@ impl Matcher {
                 '.' => {
                     fragments.push(Match::AnyChar);
                 }
+                '(' => {
+                    Self::parse_alternates(&mut chars, &mut fragments);
+                }
                 c => fragments.push(Match::Literal(c.to_string())),
             }
         }
@@ -85,6 +88,27 @@ impl Matcher {
                 }
                 // TODO: not gauranteed to be a literal, should use the parse function, but is regex recursive?
                 c => group.push(Match::Literal(c.to_string())),
+            }
+        }
+    }
+
+    fn parse_alternates(chars: &mut std::str::Chars, fragments: &mut Vec<Match>) {
+        let mut alternates = Vec::new();
+        let mut alternate = Vec::new();
+
+        for c in chars.by_ref() {
+            match c {
+                '|' => {
+                    alternates.push(alternate);
+                    alternate = Vec::new();
+                }
+                ')' => {
+                    alternates.push(alternate);
+                    fragments.push(Match::Alternates(alternates));
+                    return;
+                }
+                // TODO: not gauranteed to be a literal, should use the parse function, but is regex recursive?
+                c => alternate.push(Match::Literal(c.to_string())),
             }
         }
     }
@@ -132,6 +156,7 @@ enum Match {
     OneOfMore(Box<Match>),
     ZeroOrOne(Box<Match>),
     AnyChar,
+    Alternates(Vec<Vec<Match>>),
 }
 
 enum MatchResult {
@@ -266,6 +291,36 @@ impl Match {
                 }
             }
             Match::AnyChar => MatchResult::Match(1),
+            Match::Alternates(alternates) => {
+                let mut match_length = 0;
+
+                for alternate_pattern in alternates {
+                    for fragment in alternate_pattern {
+                        let new_index = *char_index + match_length;
+                        let result = fragment.r#match(input_line, &new_index);
+
+                        match result {
+                            MatchResult::Match(fragment_match_length) => {
+                                match_length += fragment_match_length;
+                            }
+                            MatchResult::NoMatch => {
+                                match_length = 0;
+                                break;
+                            }
+                        }
+                    }
+
+                    if match_length != 0 {
+                        break;
+                    }
+                }
+
+                if match_length == 0 {
+                    MatchResult::NoMatch
+                } else {
+                    MatchResult::Match(match_length)
+                }
+            }
         }
     }
 }
