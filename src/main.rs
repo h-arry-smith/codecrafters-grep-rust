@@ -42,11 +42,20 @@ impl Matcher {
 
     fn parse_positive_character_group(chars: &mut std::str::Chars, fragments: &mut Vec<Match>) {
         let mut group = Vec::new();
+        let mut group_negative = false;
 
         for c in chars.by_ref() {
             match c {
+                // TODO: This can only be the first character in the group, should be an error otherwise
+                '^' => {
+                    group_negative = true;
+                }
                 ']' => {
-                    fragments.push(Match::Group(group));
+                    if group_negative {
+                        fragments.push(Match::NegativeGroup(group));
+                    } else {
+                        fragments.push(Match::PositiveGroup(group));
+                    }
                     return;
                 }
                 // TODO: not gauranteed to be a literal, should use the parse function, but is regex recursive?
@@ -62,10 +71,12 @@ impl Matcher {
     }
 }
 
+#[derive(Debug)]
 enum Match {
     Literal(String),
     Class(Class),
-    Group(Vec<Match>),
+    PositiveGroup(Vec<Match>),
+    NegativeGroup(Vec<Match>),
 }
 
 impl Match {
@@ -76,13 +87,17 @@ impl Match {
                 Class::Digit => input_line.chars().any(|c| c.is_ascii_digit()),
                 Class::Word => input_line.chars().any(|c| c.is_ascii_alphanumeric()),
             },
-            Match::Group(group_fragments) => group_fragments
+            Match::PositiveGroup(group_fragments) => group_fragments
                 .iter()
                 .any(|fragment| fragment.r#match(input_line)),
+            Match::NegativeGroup(group_fragments) => group_fragments
+                .iter()
+                .all(|fragment| !fragment.r#match(input_line)),
         }
     }
 }
 
+#[derive(Debug)]
 enum Class {
     Digit,
     Word,
@@ -95,8 +110,6 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
 
 // Usage: echo <input_text> | your_grep.sh -E <pattern>
 fn main() {
-    println!("Logs from your program will appear here!");
-
     if env::args().nth(1).unwrap() != "-E" {
         println!("Expected first argument to be '-E'");
         process::exit(1);
