@@ -41,6 +41,10 @@ impl Matcher {
                     let previous_fragment = fragments.pop().unwrap();
                     fragments.push(Match::OneOfMore(Box::new(previous_fragment)));
                 }
+                '?' => {
+                    let previous_fragment = fragments.pop().unwrap();
+                    fragments.push(Match::ZeroOrOne(Box::new(previous_fragment)));
+                }
                 c => fragments.push(Match::Literal(c.to_string())),
             }
         }
@@ -123,6 +127,7 @@ enum Match {
     StartOfLine(Box<Match>),
     EndOfLine(Box<Match>),
     OneOfMore(Box<Match>),
+    ZeroOrOne(Box<Match>),
 }
 
 enum MatchResult {
@@ -246,6 +251,14 @@ impl Match {
                             }
                         }
                     }
+                }
+            }
+            Match::ZeroOrOne(fragment) => {
+                let result = fragment.r#match(input_line, char_index);
+
+                match result {
+                    MatchResult::Match(match_length) => MatchResult::Match(match_length),
+                    MatchResult::NoMatch => MatchResult::Match(0),
                 }
             }
         }
