@@ -3,8 +3,15 @@ use std::io;
 use std::process;
 
 fn match_pattern(input_line: &str, pattern: &str) -> bool {
-    if pattern.chars().count() == 1 {
-        return input_line.contains(pattern);
+    let mut chars = pattern.chars();
+    if pattern.len() == 1 {
+        input_line.contains(pattern)
+    } else if chars.next().unwrap() == '\\' {
+        if chars.next().unwrap() == 'd' {
+            input_line.chars().any(|c| c.is_ascii_digit())
+        } else {
+            todo!("\\{} pattern not implemented yet", chars.nth(1).unwrap());
+        }
     } else {
         panic!("Unhandled pattern: {}", pattern)
     }
