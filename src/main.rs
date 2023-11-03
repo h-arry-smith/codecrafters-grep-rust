@@ -7,10 +7,14 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
     if pattern.len() == 1 {
         input_line.contains(pattern)
     } else if chars.next().unwrap() == '\\' {
-        if chars.next().unwrap() == 'd' {
-            input_line.chars().any(|c| c.is_ascii_digit())
+        if let Some(class) = chars.next() {
+            match class {
+                'd' => input_line.chars().any(|c| c.is_ascii_digit()),
+                'w' => input_line.chars().any(|c| c.is_ascii_alphanumeric()),
+                c => todo!("Handle class: {}", c),
+            }
         } else {
-            todo!("\\{} pattern not implemented yet", chars.nth(1).unwrap());
+            panic!("Unhandled pattern: {}", pattern)
         }
     } else {
         panic!("Unhandled pattern: {}", pattern)
