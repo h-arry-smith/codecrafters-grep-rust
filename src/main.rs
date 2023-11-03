@@ -6,14 +6,20 @@ use std::process;
 struct Matcher {
     fragments: Vec<Match>,
     match_from_start: bool,
+    match_from_end: bool,
 }
 
 impl Matcher {
     fn from_pattern(mut pattern: &str) -> Self {
         let match_from_start = pattern.starts_with('^');
+        let match_from_end = pattern.ends_with('$');
 
         if match_from_start {
             pattern = &pattern[1..];
+        }
+
+        if match_from_end {
+            pattern = &pattern[..pattern.len() - 1];
         }
 
         let fragments = Self::parse_pattern(pattern);
@@ -21,6 +27,7 @@ impl Matcher {
         Self {
             fragments,
             match_from_start,
+            match_from_end,
         }
     }
 
@@ -85,6 +92,11 @@ impl Matcher {
         loop {
             // We are out of fragments, so the pattern has matched
             if current_fragment.is_none() {
+                // If match_from_end is true, then we need to check that we are at the end of the string
+                if self.match_from_end && char_index < input_line.len() {
+                    return false;
+                }
+
                 return true;
             }
 
