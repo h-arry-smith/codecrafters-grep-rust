@@ -5,12 +5,23 @@ use std::process;
 
 struct Matcher {
     fragments: Vec<Match>,
+    match_from_start: bool,
 }
 
 impl Matcher {
-    fn from_pattern(pattern: &str) -> Self {
+    fn from_pattern(mut pattern: &str) -> Self {
+        let match_from_start = pattern.starts_with('^');
+
+        if match_from_start {
+            pattern = &pattern[1..];
+        }
+
         let fragments = Self::parse_pattern(pattern);
-        Self { fragments }
+
+        Self {
+            fragments,
+            match_from_start,
+        }
     }
 
     fn parse_pattern(pattern: &str) -> Vec<Match> {
@@ -91,8 +102,13 @@ impl Matcher {
                     char_index += match_length;
                 }
                 MatchResult::NoMatch => {
-                    // The fragment didn't match, so we advance the char_index and try again
-                    char_index += 1;
+                    // If match_from_start is true, then we fail here
+                    if self.match_from_start {
+                        return false;
+                    } else {
+                        // The fragment didn't match, so we advance the char_index and try again
+                        char_index += 1;
+                    }
                 }
             }
         }
