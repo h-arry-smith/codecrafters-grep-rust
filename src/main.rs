@@ -1,5 +1,6 @@
 use std::env;
 use std::io;
+use std::ops::Not;
 use std::process;
 
 struct Matcher {
@@ -35,6 +36,7 @@ impl Matcher {
         match chars.next() {
             Some('d') => fragments.push(Match::Class(Class::Digit)),
             Some('w') => fragments.push(Match::Class(Class::Word)),
+            Some('\\') => fragments.push(Match::Literal('\\'.to_string())),
             Some(c) => todo!("Handle character class: {}", c),
             None => panic!("Expected character after '\\'"),
         }
@@ -65,9 +67,35 @@ impl Matcher {
     }
 
     fn r#match(&self, input_line: &str) -> bool {
-        self.fragments
-            .iter()
-            .all(|fragment| fragment.r#match(input_line))
+        let mut char_index = 0;
+        let mut fragments = self.fragments.iter();
+        let mut current_fragment = fragments.next();
+
+        loop {
+            // We are out of fragments, so the pattern has matched
+            if current_fragment.is_none() {
+                return true;
+            }
+
+            // We are out of string, but still have fragments, so we didn't match
+            if char_index >= input_line.len() {
+                return false;
+            }
+
+            let fragment = current_fragment.unwrap();
+
+            match fragment.r#match(input_line, &char_index) {
+                MatchResult::Match(match_length) => {
+                    // The fragment matched, so we can get the next fragment
+                    current_fragment = fragments.next();
+                    char_index += match_length;
+                }
+                MatchResult::NoMatch => {
+                    // The fragment didn't match, so we advance the char_index and try again
+                    char_index += 1;
+                }
+            }
+        }
     }
 }
 
@@ -79,20 +107,82 @@ enum Match {
     NegativeGroup(Vec<Match>),
 }
 
-impl Match {
-    fn r#match(&self, input_line: &str) -> bool {
+enum MatchResult {
+    Match(usize),
+    NoMatch,
+}
+
+impl Not for MatchResult {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
         match self {
-            Match::Literal(literal) => input_line.contains(literal),
+            MatchResult::Match(_) => MatchResult::NoMatch,
+            MatchResult::NoMatch => MatchResult::Match(0),
+        }
+    }
+}
+
+impl From<bool> for MatchResult {
+    fn from(b: bool) -> Self {
+        if b {
+            MatchResult::Match(1)
+        } else {
+            MatchResult::NoMatch
+        }
+    }
+}
+
+impl From<MatchResult> for bool {
+    fn from(m: MatchResult) -> Self {
+        match m {
+            MatchResult::Match(_) => true,
+            MatchResult::NoMatch => false,
+        }
+    }
+}
+
+impl Match {
+    fn r#match(&self, input_line: &str, char_index: &usize) -> MatchResult {
+        match self {
+            Match::Literal(literal) => {
+                let literal_length = literal.len();
+
+                if input_line.len() < literal_length {
+                    return MatchResult::NoMatch;
+                }
+
+                let input_line_fragment = &input_line[*char_index..*char_index + literal_length];
+
+                if input_line_fragment != *literal {
+                    return MatchResult::NoMatch;
+                }
+
+                MatchResult::Match(literal_length)
+            }
             Match::Class(class) => match class {
-                Class::Digit => input_line.chars().any(|c| c.is_ascii_digit()),
-                Class::Word => input_line.chars().any(|c| c.is_ascii_alphanumeric()),
+                // TODO: Very similar code, should be able to generalize with a high order function
+                Class::Digit => input_line[*char_index..]
+                    .chars()
+                    .next()
+                    .unwrap()
+                    .is_ascii_digit()
+                    .into(),
+                Class::Word => input_line[*char_index..]
+                    .chars()
+                    .next()
+                    .unwrap()
+                    .is_ascii_alphanumeric()
+                    .into(),
             },
             Match::PositiveGroup(group_fragments) => group_fragments
                 .iter()
-                .any(|fragment| fragment.r#match(input_line)),
+                .any(|fragment| fragment.r#match(input_line, char_index).into())
+                .into(),
             Match::NegativeGroup(group_fragments) => group_fragments
                 .iter()
-                .all(|fragment| !fragment.r#match(input_line)),
+                .all(|fragment| (!fragment.r#match(input_line, char_index)).into())
+                .into(),
         }
     }
 }
